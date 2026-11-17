@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="英语阅读器">
+<meta name="theme-color" content="#f4efe6">
+<!-- 版本号：和 js/app.js 里的 APP_VER、sw.js 里的 VER 必须一致。
+     三者不一致说明浏览器拿到了「新页面 + 旧脚本」，脚本会自己重新加载一次。 -->
+<meta name="rd-ver" content="rd-v1.7.2">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+<title>英语阅读器</title>
+</head>
+<body>
+
+<!-- ══════════ 书架 ══════════ -->
+<section id="library" class="view active">
+  <header class="bar">
+    <div class="bar-title">
+      <h1>英语阅读器</h1>
+      <p class="sub" id="libSub">导入文献，点词即查</p>
+    </div>
+    <div class="bar-actions">
+      <button class="icon-btn" id="btnVocabLib" title="生词本">生词本</button>
+      <button class="icon-btn" id="btnSettings" title="设置">设置</button>
+    </div>
+  </header>
+
+  <div class="scroll" id="libScroll">
+    <div class="warn-banner" id="frameWarn" hidden>
+      <b>你现在是嵌在对话面板里打开的，这个面板可能拦掉系统的文件选择框</b>
+      <span>如果点「导入文献」没反应：把 PDF 从文件夹<b>直接拖进下面的方框</b>；或者用浏览器单独打开上面的网址（电脑上用 Chrome / Edge，iPad 上用 Safari）再来导入。</span>
+      <button class="mini-btn" id="frameCopy">复制网址</button>
+    </div>
+
+    <div class="warn-banner danger" id="storageWarn" hidden>
+      <b>浏览器禁止了本地存储，导入的文档关掉页面就没了</b>
+      <span id="storageWhy"></span>
+      <span>想正常使用，请复制网址用浏览器单独打开。</span>
+      <button class="mini-btn" id="storageCopy">复制网址</button>
+    </div>
+
+    <div class="warn-banner danger" id="ioError" hidden></div>
+
+    <!-- 用原生 label 触发，不依赖 JS，iOS 上最可靠 -->
+    <label class="import-zone" id="importZone" for="fileInput">
+      <!-- 刻意不写 accept：iOS 的选择器会把「类型不符合」的文件整行变灰、
+           根本点不动，用户只会看到「为什么不行」。这里放开所有类型，
+           是不是能用改由读文件头来判断，选错了也一定给一句人话解释。 -->
+      <input type="file" id="fileInput" class="file-input" multiple>
+      <div class="import-inner">
+        <div class="import-icon">＋</div>
+        <div class="import-title">导入文献</div>
+        <div class="import-hint">点这里选文件，也可以直接把文件拖进来 · PDF、Word、图片、TXT 都行</div>
+      </div>
+    </label>
+    <div class="import-alt">
+      可以一次多选。文档保存在本机，不会上传到任何服务器。
+    </div>
+    <details class="import-more">
+      <summary>从微信 / QQ 收到的 PDF 怎么导入？</summary>
+      <p>微信的文件存在微信自己的空间里，网页读不到，所以要先把它转存到系统「文件」App：</p>
+      <ol>
+        <li>在微信里打开那个 PDF</li>
+        <li>点右上角 <b>「···」</b></li>
+        <li>选 <b>「用其他应用打开」</b>（部分版本叫「打开方式」）</li>
+        <li>选 <b>「存储到「文件」」</b>，位置选 <b>「我的 iPad」</b>（选 iCloud 也行）</li>
+        <li>回到这里点「导入文献」，在文件选择器里找到它即可</li>
+      </ol>
+      <p>如果没看到「用其他应用打开」，可以先把文件<b>转发给「文件传输助手」</b>，在电脑上打开后再存进网盘 / 邮件附件，iPad 上从网盘或邮件保存到「文件」。</p>
+      <p><b>文件在选择器里是灰的、点不动？</b>那是 iOS 选择器禁用了它，不是网页的问题。常见原因是这个文件还在 iCloud 上、没有下载到本机 —— 先打开「文件」App 点一下它，等下载完再回来导入。</p>
+      <p><b>Word 文档：</b>新版 <b>.docx</b> 直接就能读，不用转换。老版 <b>.doc</b> 读不了，需要在 WPS / Word 里先「另存为 .docx」或「导出为 PDF」。</p>
+      <p><b>图片（截图、拍照、扫描件）：</b>JPG / PNG / WebP / HEIC 都能导入，打开时会自动识别图里的英文，认出来的词就能点（第一次识别要等几秒，之后是秒开）。<b>字太小或太糊会认不出</b>，尽量用原图别压缩。</p>
+    </details>
+
+    <div class="section-head">
+      <span>我的文献</span>
+      <span class="muted" id="libCount"></span>
+    </div>
+    <div class="sample-row">
+      <button class="sample-btn" id="btnSample">
+        <b>没有 PDF 在手？→ 打开示例文献试用点词</b>
+        <span>一篇审计主题的英文短文，3 页，可以随便点</span>
+      </button>
+    </div>
+    <div id="libList" class="lib-list"></div>
+    <div id="libEmpty" class="empty">还没有文献，点上面的「导入文献」开始</div>
+    <div class="foot-hint">文档保存在本机浏览器里，不会上传到任何服务器。</div>
+  </div>
+</section>
+
+<!-- ══════════ 阅读器 ══════════ -->
+<section id="reader" class="view">
+  <header class="bar reader-bar">
+    <button class="icon-btn back" id="btnBack">‹ 返回</button>
+    <button class="icon-btn ink-toggle" id="btnInk" title="手写批注">✎ 批注</button>
+    <div class="doc-name" id="docName">—</div>
+    <div class="bar-actions">
+      <span class="pager" id="pager">1 / 1</span>
+      <button class="icon-btn" id="btnRead" title="朗读">🔊 朗读</button>
+      <button class="icon-btn" id="btnFullTrans">全文翻译</button>
+      <button class="icon-btn" id="btnVocabReader">生词本</button>
+      <button class="icon-btn" id="btnReaderMenu">Aa</button>
+    </div>
+  </header>
+
+  <div class="reader-warn" id="pdfWarn" hidden>
+    <div class="rw-text">
+      <b id="pdfWarnTitle"></b>
+      <span id="pdfWarnBody"></span>
+    </div>
+    <button class="mini-btn" id="pdfWarnClose">知道了</button>
+  </div>
+
+  <div class="reader-scroll" id="readerScroll">
+    <div class="pages" id="pages"></div>
+    <div class="reader-tail"></div>
+  </div>
+
+  <div class="progress-rail"><div class="progress-bar" id="progressBar"></div></div>
+</section>
+
+<!-- ══════════ 全文对照翻译 ══════════ -->
+<section id="trans" class="view">
+  <header class="bar reader-bar">
+    <button class="icon-btn back" id="transBack">‹ 返回</button>
+    <button class="icon-btn ink-toggle" id="btnInkTrans" title="手写批注">✎ 批注</button>
+    <div class="doc-name" id="transName">全文翻译</div>
+    <div class="bar-actions">
+      <span class="pager" id="transProg">—</span>
+      <div class="seg seg-sm" id="segTrans">
+        <button data-mode="both" class="on">对照</button>
+        <button data-mode="cn">中文</button>
+        <button data-mode="en">原文</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="reader-warn" id="transWarn" hidden>
+    <div class="rw-text">
+      <b id="transWarnTitle"></b>
+      <span id="transWarnBody"></span>
+    </div>
+    <button class="mini-btn" id="transWarnClose">知道了</button>
+  </div>
+
+  <div class="reader-scroll" id="transScroll">
+    <div class="trans-wrap">
+      <div class="trans-head" id="transHead"></div>
+      <div class="txt-body" id="transBody"></div>
+      <div class="reader-tail"></div>
+    </div>
+  </div>
+
+  <div class="progress-rail"><div class="progress-bar" id="transBar"></div></div>
+</section>
+
+<!-- ══════════ 生词本 ══════════ -->
+<div id="vocabPanel" class="sheet-overlay">
+  <div class="sheet sheet-tall">
+    <header class="sheet-head">
+      <h2>生词本 <span class="count-chip" id="vocabCount">0</span></h2>
+      <div class="bar-actions">
+        <button class="icon-btn" id="vocabExportCsv">导出 CSV</button>
+        <button class="icon-btn" id="vocabExportAnki">Anki</button>
+        <button class="icon-btn" id="vocabClose">关闭</button>
+      </div>
+    </header>
+    <div class="sheet-tools">
+      <input id="vocabSearch" class="search" type="search" placeholder="搜索生词…" autocomplete="off">
+      <button class="icon-btn danger" id="vocabClear">清空</button>
+    </div>
+    <div class="sheet-body" id="vocabList"></div>
+  </div>
+</div>
+
+<!-- ══════════ 设置 ══════════ -->
+<div id="settingsPanel" class="sheet-overlay">
+  <div class="sheet">
+    <header class="sheet-head">
+      <h2>设置</h2>
+      <button class="icon-btn" id="settingsClose">关闭</button>
+    </header>
+    <div class="sheet-body settings-body">
+      <div class="row">
+        <label>阅读主题</label>
+        <div class="seg" id="segTheme">
+          <button data-theme="paper" class="on">米色</button>
+          <button data-theme="white">白纸</button>
+          <button data-theme="night">夜间</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>页面缩放</label>
+        <div class="seg" id="segZoom">
+          <button data-zoom="1">100%</button>
+          <button data-zoom="1.35" class="on">135%</button>
+          <button data-zoom="1.8">180%</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>用真人发音</label>
+        <button class="switch" id="swAudio" role="switch" aria-checked="true"><span></span></button>
+      </div>
+      <div class="row">
+        <label>自动收藏查过的词</label>
+        <button class="switch" id="swAutoStar" role="switch" aria-checked="false"><span></span></button>
+      </div>
+      <div class="row col">
+        <label>离线词典</label>
+        <p class="muted" id="dictState">正在检查…</p>
+      </div>
+      <div class="row col">
+        <label>中文译文润色</label>
+        <div class="seg" id="segPolish">
+          <button data-polish="off">不润色</button>
+          <button data-polish="light">轻度</button>
+          <button data-polish="std" class="on">标准</button>
+          <button data-polish="max">强力</button>
+        </div>
+        <p class="muted" id="polishHint">
+          标准档：纠正会计审计术语、去掉机器腔、中英数字之间补空格。
+          强力档再顺一遍句式。切换后立即生效，不用重新翻译。
+        </p>
+      </div>
+      <div class="row">
+        <label>专业术语纠正</label>
+        <button class="switch" id="swTerms" role="switch" aria-checked="true"><span></span></button>
+      </div>
+      <div class="row col">
+        <label>翻译额度用的邮箱（可选）</label>
+        <input id="transEmail" class="text-input" type="email" inputmode="email" autocomplete="email"
+               placeholder="填了可把每日免费额度从约 5 千词提到约 5 万词">
+        <p class="muted">翻译用的是免费的 MyMemory 接口。匿名额度很小，填一个真实邮箱能提到十倍，只作为请求参数，不会上传到别处。</p>
+      </div>
+      <div class="row col">
+        <label>朗读</label>
+        <div class="spk-set">
+          <button class="mini-btn" id="spkRateDn">慢一点</button>
+          <span id="spkRateNow">1.0×</span>
+          <button class="mini-btn" id="spkRateUp">快一点</button>
+          <button class="mini-btn" id="spkVoice">换一个发音</button>
+        </div>
+        <p class="muted">iPad 上用的是系统自带的英文语音，不需要联网。想换音色：iPad 的「设置 → 辅助功能 → 朗读内容 → 声音」里下载一个英文语音，再回来这里切换。</p>
+      </div>
+      <div class="row col">
+        <label>手写批注</label>
+        <p class="muted" id="inkState">—</p>
+        <button class="mini-btn" id="inkClear">清除这篇文档的全部批注</button>
+        <p class="muted">阅读页顶部点「批注」就能用 Apple Pencil 在页面上直接写；笔迹跟着文档存在本机。</p>
+      </div>
+      <div class="row col">
+        <label>扫描件 OCR</label>
+        <p class="muted" id="ocrState">—</p>
+        <button class="mini-btn" id="ocrSelfTest">检测识别引擎能不能用</button>
+        <p class="muted" id="ocrSelfResult">图片、扫描件能不能点词，全看这个引擎。<br>如果它起不来，点一下上面这个按钮，把结果发给我就能定位。</p>
+        <button class="mini-btn" id="ocrClear">清除已识别的缓存</button>
+      </div>
+      <div class="row col">
+        <label>朗读</label>
+        <p class="muted" id="spkState">—</p>
+        <button class="mini-btn" id="spkSelfTest">检测朗读能不能用</button>
+        <p class="muted" id="spkSelfResult">点一下，它会真的读一句英文。没声音时，把这里显示的结果发我就能定位。</p>
+      </div>
+      <div class="row col">
+        <label>运行环境诊断</label>
+        <div class="diag" id="diagBox">检查中…</div>
+        <button class="mini-btn" id="diagCopy">复制诊断信息</button>
+      </div>
+      <div class="row col">
+        <label>关于</label>
+        <p class="muted">
+          <b style="color:var(--text)">不联网也能用：</b>内置词典已覆盖 3.7 万个高频词，断网时音标和中文释义照常显示。<br>
+          <b style="color:var(--text)">联网时额外给到：</b>英文释义、例句、真人发音，以及整句／整段的中文翻译。<br>
+          <b style="color:var(--text)">用法提示：</b>点任意单词即可查词；长按选中一段文字可整段翻译。文献存在本机，不会上传。
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 查词卡片 ══════════ -->
+<div id="wordCard" class="wordcard">
+  <div class="wc-grabber"></div>
+  <div class="wc-head">
+    <div class="wc-main">
+      <div class="wc-word" id="wcWord">—</div>
+      <div class="wc-sub">
+        <span class="ipa" id="wcIpa"></span>
+        <span class="pos" id="wcPos"></span>
+        <span class="badge" id="wcSrc"></span>
+      </div>
+    </div>
+    <div class="wc-actions">
+      <button class="round-btn" id="wcSpeak" title="发音">🔊</button>
+      <button class="round-btn star" id="wcStar" title="收藏">☆</button>
+      <button class="round-btn" id="wcClose" title="关闭">✕</button>
+    </div>
+  </div>
+  <div class="wc-body" id="wcBody"></div>
+  <div class="wc-foot">
+    <button class="ghost-btn" id="wcSentence">翻译整句</button>
+    <button class="ghost-btn" id="wcMore">全部释义</button>
+  </div>
+</div>
+
+<!-- ══════════ 选区翻译浮条 ══════════ -->
+<div id="selBar" class="selbar">
+  <button id="selTranslate">翻译选中</button>
+  <button id="selCopy">复制</button>
+  <span class="sel-hl" id="selHl">
+    <button class="hl-dot" data-hl="#f2c14e" style="background:#f2c14e" title="标黄"></button>
+    <button class="hl-dot" data-hl="#8fd18a" style="background:#8fd18a" title="标绿"></button>
+    <button class="hl-dot" data-hl="#9ec7f0" style="background:#9ec7f0" title="标蓝"></button>
+    <button class="hl-dot" data-hl="#e9a3bd" style="background:#e9a3bd" title="标粉"></button>
+  </span>
+</div>
+
+<!-- ══════════ 手写批注工具条 ══════════ -->
+<div id="inkBar" class="ink-bar">
+  <button data-tool="pen" class="on">✏️ 钢笔</button>
+  <button data-tool="marker">🖍 荧光</button>
+  <button data-tool="note">✎ 便签</button>
+  <button data-tool="eraser">⌫ 橡皮</button>
+  <span class="ink-sep"></span>
+  <span class="ink-colors" id="inkColors">
+    <button data-color="#c0392b" class="on" style="background:#c0392b" title="红"></button>
+    <button data-color="#2c6fbb" style="background:#2c6fbb" title="蓝"></button>
+    <button data-color="#2f7d4f" style="background:#2f7d4f" title="绿"></button>
+    <button data-color="#3a3a3a" style="background:#3a3a3a" title="墨"></button>
+  </span>
+  <input type="range" id="inkWidth" min="1" max="7" step="0.5" value="2" title="笔的粗细">
+  <span class="ink-sep"></span>
+  <button data-act="undo">撤销</button>
+  <button data-act="clear">清除本页</button>
+  <button data-act="exit" class="ink-exit">完成</button>
+</div>
+
+<div id="toast" class="toast"></div>
+<div id="blocker" class="blocker"><div class="spinner"></div><div id="blockerText">处理中…</div></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
